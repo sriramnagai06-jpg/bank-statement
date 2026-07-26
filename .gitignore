@@ -1,0 +1,14 @@
+# Temporary uploads & generated files
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Python cache & virtual environment
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Environment / local files
+cloudflared.exe
+*.log

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statement Ledger — Bank Statement Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="ruled-backdrop" aria-hidden="true"></div>
+
+<header class="site-header">
+  <div class="brand">
+    <span class="brand-mark">§</span>
+    <span class="brand-name">Statement Ledger</span>
+  </div>
+  <p class="brand-tagline">Turn a bank statement PDF into a clean, month-wise Excel ledger.</p>
+</header>
+
+<main>
+
+  <!-- Upload passbook card -->
+  <section class="passbook" id="uploadCard">
+    <div class="passbook-stitching" aria-hidden="true"></div>
+
+    <form id="uploadForm">
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload bank statement PDF">
+        <div class="dropzone-stamp">
+          <svg viewBox="0 0 64 64" class="dropzone-icon" aria-hidden="true">
+            <path d="M32 6 L32 40 M20 28 L32 40 L44 28" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 46 L12 54 L52 54 L52 46" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <p class="dropzone-title">Drop your statement here</p>
+        <p class="dropzone-sub">or click to choose a PDF — Canara, SBI, HDFC, ICICI, Axis and other Indian banks</p>
+        <input type="file" id="fileInput" name="statement" hidden>
+      </div>
+
+      <div class="form-row">
+        <label for="bankSelect">Bank</label>
+        <select id="bankSelect" name="bank">
+          <option value="auto" selected>Auto-detect</option>
+          <option value="canara">Canara Bank</option>
+          <option value="sbi">State Bank of India</option>
+          <option value="hdfc">HDFC Bank</option>
+          <option value="icici">ICICI Bank</option>
+          <option value="axis">Axis Bank</option>
+          <option value="pnb">Punjab National Bank</option>
+          <option value="bob">Bank of Baroda</option>
+          <option value="kotak">Kotak Mahindra Bank</option>
+          <option value="indusind">IndusInd Bank</option>
+          <option value="union">Union Bank of India</option>
+          <option value="idfc">IDFC First Bank</option>
+          <option value="yes">Yes Bank</option>
+          <option value="boi">Bank of India</option>
+          <option value="cbi">Central Bank of India</option>
+          <option value="iob">Indian Overseas Bank</option>
+          <option value="uco">UCO Bank</option>
+          <option value="federal">Federal Bank</option>
+          <option value="southindian">South Indian Bank</option>
+          <option value="indian">Indian Bank</option>
+          <option value="other">Other Indian Bank</option>
+        </select>
+
+        <div class="file-chip" id="fileChip" hidden>
+          <span id="fileName"></span>
+          <button type="button" id="clearFile" aria-label="Remove file">&times;</button>
+        </div>
+      </div>
+      
+      <div class="form-row" style="margin-top: 1rem;">
+        <label for="pdfPassword">Password</label>
+        <input type="password" id="pdfPassword" name="password" placeholder="PDF Password (Optional)">
+        
+        <button type="submit" class="btn-primary" id="analyzeBtn" disabled>Analyze statement</button>
+      </div>
+    </form>
+
+    <p class="error-line" id="errorLine" role="alert" hidden></p>
+  </section>
+
+  <!-- Loading state -->
+  <section class="ledger-loading" id="loadingState" hidden>
+    <div class="ink-spinner" aria-hidden="true"></div>
+    <p id="loadingText">Reading pages…</p>
+  </section>
+
+  <!-- Results -->
+  <section class="results" id="results" hidden>
+
+    <div class="results-header">
+      <div class="results-meta">
+        <span class="results-bank" id="resultBank">—</span>
+        <span class="results-count" id="resultCount">—</span>
+      </div>
+      <div class="stamp" id="stamp">
+        <span>ANALYZED</span>
+      </div>
+    </div>
+
+    <div class="month-tabs" id="monthTabs" role="tablist"></div>
+
+    <div class="ledger-table-wrap">
+      <table class="ledger-table" id="ledgerTable">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>Credit</th>
+            <th>Debit</th>
+            <th>Credit Charge</th>
+            <th>Debit Charge</th>
+            <th>Credit Interest</th>
+            <th>Debit Interest</th>
+            <th>Txns</th>
+          </tr>
+        </thead>
+        <tbody id="ledgerBody"></tbody>
+      </table>
+    </div>
+
+    <div class="results-actions">
+      <a href="#" id="downloadBtn" class="btn-primary" download>Download month-wise Excel</a>
+      <button type="button" id="startOverBtn" class="btn-ghost">Analyze another statement</button>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <p>Figures are computed directly from the statement's own Debit / Credit / Balance columns. Charges are lines containing “CHG”, interest lines contain “INT”.</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
