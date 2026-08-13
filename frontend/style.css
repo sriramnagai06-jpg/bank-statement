@@ -24,10 +24,17 @@
   --brass-deep: #96703D;
   --slate: #5B6472;
   --rule: rgba(22, 35, 61, 0.14);
+  --warning-amber: #C07A1A;
 
   --font-display: 'Fraunces', serif;
   --font-body: 'IBM Plex Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Safe area insets for notched phones */
+  --sai-top: env(safe-area-inset-top, 0px);
+  --sai-right: env(safe-area-inset-right, 0px);
+  --sai-bottom: env(safe-area-inset-bottom, 0px);
+  --sai-left: env(safe-area-inset-left, 0px);
 }
 
 * { box-sizing: border-box; }
@@ -39,18 +46,31 @@ html, body {
   color: var(--ink-navy);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   min-height: 100vh;
+  min-height: 100dvh; /* dynamic viewport height for mobile */
   position: relative;
   overflow-x: hidden;
+  /* Safe area padding for notched phones */
+  padding-top: var(--sai-top);
+  padding-left: var(--sai-left);
+  padding-right: var(--sai-right);
+  padding-bottom: var(--sai-bottom);
 }
 
 /* Subtle ruled-ledger backdrop texture */
 .ruled-backdrop {
   position: fixed;
-  inset: 0;
+  /* Fallback for older browsers that don't support inset */
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: -1;
   background-image: repeating-linear-gradient(
     to bottom,
@@ -63,6 +83,17 @@ body {
 }
 
 a { color: inherit; }
+
+/* Global focus-visible for keyboard accessibility */
+*:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+/* Ensure all interactive elements have good touch targets */
+button, select, input, a, [role="button"], [role="tab"] {
+  touch-action: manipulation;
+}
 
 /* ---------------- Header ---------------- */
 
@@ -130,13 +161,28 @@ main {
 }
 
 .dropzone {
+  display: block;
   border: 1.5px solid var(--rule);
   border-radius: 4px;
   background: var(--parchment);
   padding: 46px 20px;
   text-align: center;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 .dropzone:hover,
@@ -145,6 +191,11 @@ main {
   border-color: var(--brass);
   background: #F4EEDD;
   outline: none;
+}
+
+/* Active/pressed state for touch */
+.dropzone:active {
+  background: #EFE6D0;
 }
 
 .dropzone-stamp {
@@ -197,7 +248,89 @@ select#bankSelect {
   border: 1px solid var(--rule);
   background: #fff;
   color: var(--ink-navy);
+  min-height: 44px; /* Touch-friendly minimum */
 }
+
+input#pdfPassword {
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 9px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--rule);
+  background: #fff;
+  color: var(--ink-navy);
+  min-height: 44px; /* Touch-friendly minimum */
+}
+
+input#pdfPassword::placeholder {
+  color: var(--slate);
+  opacity: 0.7;
+}
+
+/* --- Input Mode Selector & Copy-Paste Styles --- */
+.mode-tabs {
+  display: flex;
+  border-bottom: 1.5px solid var(--rule);
+  margin-bottom: 22px;
+  gap: 16px;
+}
+
+.mode-tab {
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--slate);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  margin-bottom: -1.5px;
+}
+
+.mode-tab:hover {
+  color: var(--ink-navy);
+}
+
+.mode-tab.active {
+  color: var(--ink-navy);
+  font-weight: 600;
+  border-bottom-color: var(--brass);
+}
+
+.paste-zone {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+textarea#pasteInput {
+  width: 100%;
+  min-height: 180px;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  padding: 12px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--rule);
+  background: #fff;
+  color: var(--ink-navy);
+  resize: vertical;
+  line-height: 1.5;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+textarea#pasteInput:focus {
+  border-color: var(--brass);
+  box-shadow: 0 0 0 2px rgba(184, 146, 90, 0.15);
+}
+
+textarea#pasteInput::placeholder {
+  color: var(--slate);
+  opacity: 0.6;
+  font-family: var(--font-body);
+}
+
 
 .file-chip {
   display: inline-flex;
@@ -209,6 +342,15 @@ select#bankSelect {
   padding: 6px 8px 6px 14px;
   font-size: 13px;
   font-family: var(--font-mono);
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.file-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .file-chip button {
@@ -219,6 +361,12 @@ select#bankSelect {
   line-height: 1;
   color: var(--stamp-red);
   padding: 4px 6px;
+  min-width: 44px; /* Touch-friendly */
+  min-height: 44px; /* Touch-friendly */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .btn-primary {
@@ -231,10 +379,14 @@ select#bankSelect {
   border: none;
   border-radius: 4px;
   padding: 11px 22px;
+  min-height: 44px; /* Touch-friendly minimum */
   cursor: pointer;
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: background 0.15s ease, transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-primary:hover:not(:disabled) { background: var(--ink-navy-soft); }
@@ -250,7 +402,12 @@ select#bankSelect {
   border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 10px 20px;
+  min-height: 44px; /* Touch-friendly minimum */
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
 }
 .btn-ghost:hover { border-color: var(--brass); }
 
@@ -259,6 +416,15 @@ select#bankSelect {
   color: var(--stamp-red);
   font-size: 13.5px;
   font-weight: 500;
+  word-break: break-word;
+}
+
+.warning-line {
+  margin: 12px 2px 0;
+  color: var(--warning-amber);
+  font-size: 13px;
+  font-weight: 500;
+  word-break: break-word;
 }
 
 /* ---------------- Loading ---------------- */
@@ -280,6 +446,10 @@ select#bankSelect {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.btn-cancel {
+  margin-top: 16px;
+}
 
 /* ---------------- Results ---------------- */
 
@@ -333,23 +503,44 @@ select#bankSelect {
 
 .month-tabs {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   overflow-x: auto;
   padding-bottom: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.month-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+.month-tabs::-webkit-scrollbar-thumb {
+  background: var(--brass);
+  border-radius: 4px;
 }
 
 .month-tab {
   flex: none;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
-  padding: 7px 13px;
-  border-radius: 16px;
+  padding: 8px 14px;
+  min-height: 44px; /* Touch-friendly */
+  border-radius: 20px;
   border: 1px solid var(--rule);
   background: #fff;
   color: var(--slate);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.month-tab:hover,
+.month-tab:focus-visible {
+  border-color: var(--brass);
+  color: var(--ink-navy);
+  outline: none;
 }
 
 .month-tab.active {
@@ -363,11 +554,35 @@ select#bankSelect {
   border: 1px solid var(--rule);
   border-radius: 6px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  position: relative;
+  box-shadow: inset -6px 0 8px -6px rgba(0,0,0,0.1);
+}
+
+/* Scroll fade indicator on right edge */
+.ledger-table-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, rgba(251,248,240,0.8));
+  border-radius: 0 6px 6px 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.ledger-table-wrap.can-scroll-right::after {
+  opacity: 1;
 }
 
 .ledger-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-family: var(--font-mono);
   font-size: 13px;
   min-width: 720px;
@@ -384,13 +599,24 @@ select#bankSelect {
   padding: 14px 16px;
   border-bottom: 1.5px solid var(--ink-navy);
   white-space: nowrap;
+  background: #F8F3E6;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
-.ledger-table thead th:first-child { text-align: left; }
+.ledger-table thead th:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #F8F3E6;
+  border-right: 1px solid var(--rule);
+}
 
 .ledger-table tbody td {
   text-align: right;
-  padding: 11px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--rule);
   white-space: nowrap;
 }
@@ -399,12 +625,21 @@ select#bankSelect {
   text-align: left;
   font-family: var(--font-body);
   font-weight: 600;
+  position: sticky;
+  left: 0;
+  background: #FBF8F0;
+  z-index: 1;
+  border-right: 1px solid var(--rule);
 }
 
 .ledger-table tbody tr.total-row td {
   font-weight: 700;
   border-top: 1.5px solid var(--ink-navy);
   border-bottom: none;
+  background: var(--parchment-deep);
+}
+
+.ledger-table tbody tr.total-row td:first-child {
   background: var(--parchment-deep);
 }
 
@@ -434,19 +669,140 @@ select#bankSelect {
   margin: 0 auto;
 }
 
-/* ---------------- Responsive ---------------- */
+/* ---------------- Responsive & Touch ---------------- */
 
-@media (max-width: 600px) {
-  .site-header { padding: 40px 20px 22px; }
+/* Tablet breakpoint */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .site-header { padding: 44px 20px 24px; }
+  .brand-name { font-size: 28px; }
+  .passbook { padding: 32px 28px 26px; }
+  
+  .ledger-table {
+    font-size: 12.5px;
+  }
+  
+  .results-actions {
+    gap: 10px;
+  }
+}
+
+/* Mobile breakpoint */
+@media (max-width: 640px) {
+  .site-header { padding: 36px 16px 20px; }
   .brand-name { font-size: 24px; }
-  .passbook { padding: 28px 18px 22px; }
-  .form-row { flex-direction: column; align-items: stretch; }
-  .btn-primary { margin-left: 0; }
-  .results-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .brand-tagline { font-size: 14px; }
+  .passbook { padding: 24px 14px 20px; }
+  
+  .form-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  select#bankSelect,
+  input#pdfPassword {
+    width: 100%;
+    min-height: 48px; /* Slightly larger on mobile for easy tapping */
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+  
+  .btn-primary, .btn-ghost {
+    width: 100%;
+    margin-left: 0;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+  }
+  
+  .results-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .results-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .file-chip {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .dropzone {
+    padding: 36px 16px;
+  }
+  
+  .dropzone-title {
+    font-size: 17px;
+  }
+  
+  .dropzone-sub {
+    font-size: 13px;
+  }
+  
+  .month-tab {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+  
+  .ledger-table {
+    font-size: 12px;
+    min-width: 600px;
+  }
+  
+  .ledger-table thead th {
+    padding: 10px 10px;
+    font-size: 10.5px;
+  }
+  
+  .ledger-table tbody td {
+    padding: 10px 10px;
+  }
+}
+
+/* Small phones (iPhone SE, etc.) */
+@media (max-width: 375px) {
+  .brand-name { font-size: 22px; }
+  .brand-mark { font-size: 28px; }
+  .passbook { padding: 20px 10px 16px; }
+  
+  .dropzone {
+    padding: 28px 12px;
+  }
+  
+  .results-bank {
+    font-size: 18px;
+  }
+}
+
+/* Landscape phone */
+@media (max-height: 500px) and (orientation: landscape) {
+  .site-header {
+    padding: 20px 24px 12px;
+  }
+  
+  .dropzone {
+    padding: 24px 20px;
+  }
 }
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .ink-spinner { animation: none; border-top-color: var(--brass); }
   .stamp { transition: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+
+/* High contrast mode support */
+@media (forced-colors: active) {
+  .btn-primary {
+    border: 2px solid ButtonText;
+  }
+  .dropzone {
+    border: 2px solid ButtonText;
+  }
 }

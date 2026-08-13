@@ -1,7 +1,6 @@
 @echo off
-echo ============================================================
-echo  Generating Public Internet Link for DIFFERENT Wi-Fi / Mobile Data
-echo ============================================================
+echo Creating Public Internet Link for DIFFERENT Wi-Fi / Mobile Data...
 echo.
-ssh -o StrictHostKeyChecking=no -R 80:127.0.0.1:5000 serveo.net
+ssh -o StrictHostKeyChecking=no -R 80:localhost:5000 nokey@localhost.run
 pause
+

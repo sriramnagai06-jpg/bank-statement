@@ -11,4 +11,9 @@ venv/
 
 # Environment / local files
 cloudflared.exe
+cloudflared_win.exe
 *.log
+
+# OS files
+.DS_Store
+Thumbs.db

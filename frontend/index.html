@@ -2,9 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+<meta name="theme-color" content="#EFE8D8">
+<meta name="description" content="Turn any Indian bank statement PDF into a clean, month-wise Excel ledger instantly on phone or laptop.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Statement Ledger">
+<meta name="format-detection" content="telephone=no">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Statement Ledger — Bank Statement Analyzer</title>
+<link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -27,22 +36,38 @@
     <div class="passbook-stitching" aria-hidden="true"></div>
 
     <form id="uploadForm">
-      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload bank statement PDF">
-        <div class="dropzone-stamp">
-          <svg viewBox="0 0 64 64" class="dropzone-icon" aria-hidden="true">
-            <path d="M32 6 L32 40 M20 28 L32 40 L44 28" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M12 46 L12 54 L52 54 L52 46" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <p class="dropzone-title">Drop your statement here</p>
-        <p class="dropzone-sub">or click to choose a PDF — Canara, SBI, HDFC, ICICI, Axis and other Indian banks</p>
-        <input type="file" id="fileInput" name="statement" hidden>
+      <!-- Input Mode Switcher -->
+      <div class="mode-tabs" role="tablist" aria-label="Input mode">
+        <button type="button" class="mode-tab active" id="tabUploadFile" role="tab" aria-selected="true" aria-controls="fileInputContainer">Upload File</button>
+        <button type="button" class="mode-tab" id="tabPasteText" role="tab" aria-selected="false" aria-controls="pasteInputContainer">Paste Text</button>
       </div>
+
+      <div id="fileInputContainer">
+        <label class="dropzone" id="dropzone" for="fileInput" tabindex="0" role="button" aria-label="Upload bank statement PDF or Excel">
+          <div class="dropzone-stamp">
+            <svg viewBox="0 0 64 64" class="dropzone-icon" aria-hidden="true">
+              <path d="M32 6 L32 40 M20 28 L32 40 L44 28" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 46 L12 54 L52 54 L52 46" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <p class="dropzone-title">Drop your statement here</p>
+          <p class="dropzone-sub">or tap / click to select a PDF or Excel — KVB, Canara, SBI, HDFC, ICICI, Axis &amp; other banks</p>
+          <input type="file" id="fileInput" name="statement" accept="*/*,.pdf,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" class="sr-only" multiple>
+        </label>
+      </div>
+
+      <div id="pasteInputContainer" hidden>
+        <div class="paste-zone">
+          <textarea id="pasteInput" name="paste_text" placeholder="Paste your bank statement transaction rows here...&#10;e.g.&#10;12/08/2026 UPI/12345/Rent to Owner 15,000.00 50,000.00&#10;13-Aug-2026 Interest Received 500.00 50,500.00" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+        </div>
+      </div>
+
 
       <div class="form-row">
         <label for="bankSelect">Bank</label>
         <select id="bankSelect" name="bank">
           <option value="auto" selected>Auto-detect</option>
+          <option value="kvb">Karur Vysya Bank (Excel)</option>
           <option value="canara">Canara Bank</option>
           <option value="sbi">State Bank of India</option>
           <option value="hdfc">HDFC Bank</option>
@@ -72,20 +97,26 @@
       </div>
       
       <div class="form-row" style="margin-top: 1rem;">
-        <label for="pdfPassword">Password</label>
-        <input type="password" id="pdfPassword" name="password" placeholder="PDF Password (Optional)">
+        <div id="passwordFieldContainer" style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
+          <label for="pdfPassword">Password</label>
+          <input type="password" id="pdfPassword" name="password" placeholder="PDF Password (Optional)" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
         
         <button type="submit" class="btn-primary" id="analyzeBtn" disabled>Analyze statement</button>
       </div>
     </form>
 
-    <p class="error-line" id="errorLine" role="alert" hidden></p>
+    <p class="error-line" id="errorLine" role="alert" aria-live="assertive" hidden></p>
+
+    <!-- File size warning -->
+    <p class="warning-line" id="warningLine" role="status" hidden></p>
   </section>
 
   <!-- Loading state -->
   <section class="ledger-loading" id="loadingState" hidden>
     <div class="ink-spinner" aria-hidden="true"></div>
     <p id="loadingText">Reading pages…</p>
+    <button type="button" class="btn-ghost btn-cancel" id="cancelBtn">Cancel</button>
   </section>
 
   <!-- Results -->
@@ -101,9 +132,9 @@
       </div>
     </div>
 
-    <div class="month-tabs" id="monthTabs" role="tablist"></div>
+    <div class="month-tabs" id="monthTabs" role="tablist" aria-label="Filter by month"></div>
 
-    <div class="ledger-table-wrap">
+    <div class="ledger-table-wrap" id="tableWrap">
       <table class="ledger-table" id="ledgerTable">
         <thead>
           <tr>
@@ -114,6 +145,7 @@
             <th>Debit Charge</th>
             <th>Credit Interest</th>
             <th>Debit Interest</th>
+            <th>Inter-Company Transactions</th>
             <th>Txns</th>
           </tr>
         </thead>
@@ -121,8 +153,36 @@
       </table>
     </div>
 
+    <!-- Reports section -->
+    <div class="reports-section" id="reportsSection" style="margin-top: 1.5rem;" hidden>
+      <h3 style="font-family: Fraunces, serif; font-size: 1.25rem; margin-bottom: 0.75rem; color: #1e1e1e;">Reconciliation & Match Report</h3>
+      
+      <!-- Reconciliation Badge -->
+      <div id="reconBadgeContainer" style="display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding: 0.35rem 0.75rem; border-radius: 4px; font-weight: 500; font-size: 0.875rem;">
+        <span>System Reconciliation:</span>
+        <span id="reconBadge" style="text-transform: uppercase; font-weight: 600;">PASS</span>
+      </div>
+
+      <!-- Warning Box -->
+      <div id="warningBox" style="background-color: #fffbeb; border: 1px solid #fef08a; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; color: #713f12; font-size: 0.875rem;" hidden>
+        <strong style="display: block; margin-bottom: 0.25rem;">⚠️ System Warnings:</strong>
+        <ul id="warningList" style="margin: 0; padding-left: 1.25rem; line-height: 1.4;"></ul>
+      </div>
+
+      <!-- Unreconciled transactions list -->
+      <div id="unreconciledBox" style="background-color: #fef2f2; border: 1px solid #fca5a5; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; color: #991b1b; font-size: 0.875rem;" hidden>
+        <strong style="display: block; margin-bottom: 0.25rem;">🚨 Unreconciled Transactions (Needs Review):</strong>
+        <ul id="unreconciledList" style="margin: 0; padding-left: 1.25rem; font-family: monospace; line-height: 1.4;"></ul>
+      </div>
+
+      <!-- Inter-company matched pairs list -->
+      <div id="matchedPairsBox" style="background-color: #f0fdf4; border: 1px solid #86efac; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; color: #166534; font-size: 0.875rem;" hidden>
+        <strong style="display: block; margin-bottom: 0.25rem;">✨ Inter-Company Matched Pairs:</strong>
+        <ul id="matchedPairsList" style="margin: 0; padding-left: 1.25rem; font-family: monospace; line-height: 1.4;"></ul>
+      </div>
+
     <div class="results-actions">
-      <a href="#" id="downloadBtn" class="btn-primary" download>Download month-wise Excel</a>
+      <a id="downloadBtn" class="btn-primary" download>Download month-wise Excel</a>
       <button type="button" id="startOverBtn" class="btn-ghost">Analyze another statement</button>
     </div>
   </section>
@@ -130,7 +190,7 @@
 </main>
 
 <footer class="site-footer">
-  <p>Figures are computed directly from the statement's own Debit / Credit / Balance columns. Charges are lines containing “CHG”, interest lines contain “INT”.</p>
+  <p>Figures are computed directly from the statement's own Debit / Credit / Balance columns. Charges are lines containing "CHG", interest lines contain "INT".</p>
 </footer>
 
 <script src="script.js"></script>

@@ -1,0 +1,19 @@
+{
+  "name": "Statement Ledger — Bank Statement Analyzer",
+  "short_name": "Statement Ledger",
+  "description": "Turn any Indian bank statement PDF into a clean, month-wise Excel ledger instantly.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EFE8D8",
+  "theme_color": "#EFE8D8",
+  "orientation": "any",
+  "categories": ["finance", "utilities"],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2316233D'/><text x='50' y='68' font-size='55' text-anchor='middle' fill='%23B8925A' font-family='serif'>§</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

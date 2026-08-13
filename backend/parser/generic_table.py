@@ -21,28 +21,36 @@ from datetime import datetime
 import pdfplumber
 
 DEFAULT_COLUMN_ALIASES = {
-    "date": ["date", "txn date", "tran date", "transaction date", "value date", "posting date", "value dt"],
+    "date": [
+        "date", "txn date", "txn. date", "tran date", "tran. date", "transaction date",
+        "value date", "value dt", "posting date", "date & time", "post date",
+    ],
     "narration": [
         "narration", "description", "particulars", "details", "remarks",
-        "transaction remarks", "transaction details",
+        "transaction remarks", "transaction details", "narration/description",
+        "narration / description", "transaction description",
     ],
     "debit": [
-        "debit", "withdrawal", "withdrawal amt", "withdrawal amount", "withdrawal amt.",
+        "debit", "withdrawal", "withdrawals", "withdrawal amt", "withdrawal amount", "withdrawal amt.",
         "dr", "debit amount", "withdrawal amount (inr )", "withdrawal amount (inr)",
+        "debit (inr)", "debit(inr)", "withdrawal(dr)", "withdrawal (dr)", "debit (rs.)",
     ],
     "credit": [
-        "credit", "deposit", "deposit amt", "deposit amount", "deposit amt.",
+        "credit", "deposit", "deposits", "deposit amt", "deposit amount", "deposit amt.",
         "cr", "credit amount", "deposit amount (inr )", "deposit amount (inr)",
+        "credit (inr)", "credit(inr)", "deposit(cr)", "deposit (cr)", "credit (rs.)",
     ],
     "balance": [
-        "balance", "closing balance", "available balance", "balance amt",
-        "balance (inr )", "balance (inr)",
+        "balance", "closing balance", "available balance", "balance amt", "balance amount",
+        "balance (inr )", "balance (inr)", "balance(inr)", "balance (rs.)", "closing bal",
     ],
 }
 
 DATE_FORMATS = [
     "%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y",
-    "%d %b %Y", "%d-%b-%Y", "%d/%b/%Y", "%Y-%m-%d", "%d.%m.%Y",
+    "%d %b %Y", "%d-%b-%Y", "%d/%b/%Y", "%Y-%m-%d", "%d.%m.%Y", "%d.%m.%y",
+    "%d %b %y", "%d-%b-%y", "%d/%b/%y",
+    "%d/%m/%Y %H:%M:%S", "%d-%m-%Y %H:%M:%S", "%d/%m/%Y %I:%M:%S %p",
 ]
 
 
@@ -66,12 +74,20 @@ def _map_columns(header_row, column_aliases):
 def _parse_amount(value):
     if value is None:
         return 0.0
-    s = str(value).replace(",", "").replace("\u20b9", "").strip()
+    s = str(value).replace(",", "").replace("\u20b9", "").replace("Rs.", "").replace("INR", "").strip()
     s = re.sub(r"\b(Dr|Cr|DR|CR)\b", "", s).strip()
-    if s in ("", "-", "--"):
+    if not s or s in ("", "-", "--"):
         return 0.0
+
+    # Handle parenthesis format e.g. (1234.50)
+    is_neg = False
+    if s.startswith("(") and s.endswith(")"):
+        is_neg = True
+        s = s[1:-1].strip()
+
     try:
-        return float(s)
+        val = float(s)
+        return abs(val)
     except ValueError:
         return 0.0
 
@@ -80,6 +96,7 @@ def _parse_date(value):
     if value is None:
         return None
     s = str(value).strip()
+    # If date contains time, strip time portion if split by space
     for fmt in DATE_FORMATS:
         try:
             return datetime.strptime(s, fmt)

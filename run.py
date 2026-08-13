@@ -36,25 +36,48 @@ def get_local_ip():
         s.close()
     return ip
 
+def wait_for_local_port(port=5000, timeout=15):
+    """Wait until local port 5000 is active and accepting connections."""
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            with socket.create_connection(('127.0.0.1', port), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.5)
+    return False
+
 def start_public_tunnel():
-    """Start SSH tunnel to expose port 5000 to the public internet."""
-    time.sleep(1.5)
-    try:
-        proc = subprocess.Popen(
-            ["ssh", "-o", "StrictHostKeyChecking=no", "-R", "80:127.0.0.1:5000", "nokey@localhost.run"],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
-        )
-        for line in proc.stdout:
-            if "lhr.life" in line:
-                match = re.search(r'https://[a-zA-Z0-9]+\.lhr\.life', line)
-                url = match.group(0) if match else line.strip()
-                print("\n" + "=" * 65, flush=True)
-                print(" WORLDWIDE PUBLIC LINK (Works on DIFFERENT Wi-Fi & Mobile Data):", flush=True)
-                print(f" >>> {url} <<<", flush=True)
-                print("=" * 65 + "\n", flush=True)
-                break
-    except Exception as e:
-        print(f"\n[Info] Public tunnel status: {e}", flush=True)
+    """Start official Cloudflare Tunnel to expose port 5000 to the public internet."""
+    wait_for_local_port(5000)
+    time.sleep(0.5)
+    
+    cf_path = os.path.join(BASE_DIR, "cloudflared_win.exe")
+    if not os.path.exists(cf_path):
+        cf_path = os.path.join(BASE_DIR, "cloudflared.exe")
+
+    cmd = [cf_path, "tunnel", "--url", "http://127.0.0.1:5000"]
+    pattern = r'https://(?!api\.)[a-zA-Z0-9-]+\.trycloudflare\.com'
+
+    while True:
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+            )
+            for line in proc.stdout:
+                if "trycloudflare.com" in line:
+                    match = re.search(pattern, line)
+                    if match:
+                        url = match.group(0)
+                        print("\n" + "=" * 65, flush=True)
+                        print(" WORLDWIDE PUBLIC LINK (Works on ANY Phone & Laptop, Mobile Data / 5G / Wi-Fi):", flush=True)
+                        print(f" >>> {url} <<<", flush=True)
+                        print("=" * 65 + "\n", flush=True)
+            proc.wait()
+        except Exception as e:
+            print(f"\n[Tunnel Info] Tunnel status: {e}", flush=True)
+        time.sleep(2)
 
 if __name__ == "__main__":
     local_ip = get_local_ip()
