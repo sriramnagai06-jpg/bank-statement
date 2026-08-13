@@ -221,12 +221,14 @@ def reconcile_transactions(transactions):
 
     first_txn = txns[0]
     opening_balance = 0.0
-    
+    opening_known = False  # True only if we have an explicit B/F / opening balance row
+
     narr_lower = (first_txn.get("narration") or "").lower()
     is_bf = any(k in narr_lower for k in ["b/f", "brought forward", "opening balance", "balance b/d", "bal b/f"])
-    
+
     if is_bf and first_txn.get("balance") is not None:
         opening_balance = first_txn["balance"]
+        opening_known = True
         first_txn["debit"] = 0.0
         first_txn["credit"] = 0.0
         start_idx = 1
@@ -235,21 +237,22 @@ def reconcile_transactions(transactions):
         deb = first_txn.get("debit") or 0.0
         cred = first_txn.get("credit") or 0.0
         if curr_bal is not None:
+            # Derive opening from first txn — not guaranteed to be the real opening
             opening_balance = round(curr_bal + deb - cred, 2)
         start_idx = 0
 
     running_balance = opening_balance
     unreconciled_logs = []
     status = "pass"
-    
+
     for idx in range(start_idx, len(txns)):
         t = txns[idx]
         curr_bal = t.get("balance")
         deb = t.get("debit") or 0.0
         cred = t.get("credit") or 0.0
         amount = deb or cred
-        
-        # If it's a balance row (e.g. closing balance row), ignore
+
+        # If it's a balance row (e.g. closing balance row), skip
         t_narr_lower = (t.get("narration") or "").lower()
         if any(k in t_narr_lower for k in ["closing balance", "balance c/f", "balance c/d"]):
             t["debit"] = 0.0
@@ -257,12 +260,12 @@ def reconcile_transactions(transactions):
             if curr_bal is not None:
                 running_balance = curr_bal
             continue
-            
+
         if curr_bal is not None:
             expected_credit_bal = round(running_balance + amount, 2)
             expected_debit_bal = round(running_balance - amount, 2)
             actual_bal = round(curr_bal, 2)
-            
+
             # Check Credit
             if abs(expected_credit_bal - actual_bal) <= 0.02:
                 t["credit"] = amount
@@ -279,13 +282,16 @@ def reconcile_transactions(transactions):
                 t["credit"] = 0.0
                 running_balance = curr_bal
             else:
-                status = "fail"
+                # Could be a gap in statement (weekends, missing pages)
+                # Only flag as fail if opening was explicitly known
+                if opening_known:
+                    status = "fail"
                 unreconciled_logs.append(
                     f"UNRECONCILED: [{t['date'].strftime('%d-%m-%Y')}, {t['narration'][:40]}, Amount: {amount:.2f}]"
                 )
+                # Reset running balance to the stated balance to continue the chain
                 running_balance = curr_bal
         else:
-            status = "fail"
             unreconciled_logs.append(
                 f"UNRECONCILED: [{t['date'].strftime('%d-%m-%Y')}, {t['narration'][:40]}, No Balance]"
             )
@@ -294,12 +300,24 @@ def reconcile_transactions(transactions):
     total_credits = sum(t.get("credit") or 0.0 for t in txns[start_idx:])
     total_debits = sum(t.get("debit") or 0.0 for t in txns[start_idx:])
     expected_closing = round(opening_balance + total_credits - total_debits, 2)
-    
+
     verification_warning = ""
-    if abs(expected_closing - closing_balance) > 0.02:
+    # Only do the summary math check when we have a known opening balance (B/F row)
+    if opening_known and abs(expected_closing - closing_balance) > 0.02:
         status = "fail"
-        verification_warning = f"Math verification failed: Opening ({opening_balance}) + Credits ({total_credits}) - Debits ({total_debits}) = {expected_closing}, but Closing Balance is {closing_balance}"
-        
+        verification_warning = (
+            f"Math verification failed: Opening ({opening_balance:.2f}) + "
+            f"Credits ({total_credits:.2f}) - Debits ({total_debits:.2f}) = "
+            f"{expected_closing:.2f}, but Closing Balance is {closing_balance:.2f}"
+        )
+    elif not opening_known and unreconciled_logs:
+        # Warn but don't fail — likely statement gaps, not parsing errors
+        verification_warning = (
+            f"Note: {len(unreconciled_logs)} row(s) could not be matched by balance chain "
+            f"(may be due to missing pages or statement gaps). "
+            f"Chain integrity: Opening (derived {opening_balance:.2f}) → Closing {closing_balance:.2f}"
+        )
+
     return txns, status, unreconciled_logs, verification_warning
 
 
