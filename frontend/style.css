@@ -983,9 +983,50 @@ kbd {
 }
 
 /* tfoot total row */
-#txnTable tfoot .total-row td {
+#txnTable tfoot .total-row td,
+#icTable tfoot .total-row td {
   border-top: 2px solid var(--rule);
   background: var(--parchment-deep);
   font-family: var(--font-mono);
   font-size: 0.85rem;
 }
+
+/* Executive Summary Metrics Grid */
+.summary-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  margin: 1.25rem 0 1.5rem 0;
+}
+
+.metric-card {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--rule, #e2e8f0);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate, #64748b);
+}
+
+.metric-val {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink-navy, #0f172a);
+}
+
+#txnSearchInput:focus {
+  outline: 2px solid var(--ledger-teal, #0f5c4d);
+  border-color: transparent;
+}
+

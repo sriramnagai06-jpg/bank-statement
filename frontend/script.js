@@ -596,6 +596,32 @@ function renderResults(data) {
     downloadBtn.style.display = 'none';
   }
 
+  // Populate Executive Summary Metrics Cards
+  var allTxns = data.transactions || [];
+  var totalDebit = 0;
+  var totalCredit = 0;
+  allTxns.forEach(function(t) {
+    totalDebit += (Number(t.debit) || 0);
+    totalCredit += (Number(t.credit) || 0);
+  });
+
+  var metricOpeningBal = document.getElementById('metricOpeningBal');
+  var metricTotalDebit = document.getElementById('metricTotalDebit');
+  var metricTotalCredit = document.getElementById('metricTotalCredit');
+  var metricClosingBal = document.getElementById('metricClosingBal');
+  var metricTxnCount = document.getElementById('metricTxnCount');
+  var metricReconStatus = document.getElementById('metricReconStatus');
+
+  if (metricOpeningBal) metricOpeningBal.innerHTML = data.opening_balance != null ? money(data.opening_balance) : '<span class="amt-zero">—</span>';
+  if (metricTotalDebit) metricTotalDebit.innerHTML = money(totalDebit);
+  if (metricTotalCredit) metricTotalCredit.innerHTML = money(totalCredit);
+  if (metricClosingBal) metricClosingBal.innerHTML = data.closing_balance != null ? money(data.closing_balance) : '<span class="amt-zero">—</span>';
+  if (metricTxnCount) metricTxnCount.textContent = txnCount.toLocaleString('en-IN');
+  if (metricReconStatus) {
+    var isPass = (data.reconciliation_status || '').toLowerCase() === 'pass';
+    metricReconStatus.innerHTML = isPass ? '<span style="color:#166534; font-weight:700;">PASS ✓</span>' : '<span style="color:#991b1b; font-weight:700;">REVIEW ⚠️</span>';
+  }
+
   // Build month tabs with proper ARIA
   monthTabs.innerHTML = '';
   if (data.summary && data.summary.length > 0) {
@@ -608,7 +634,6 @@ function renderResults(data) {
       tab.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
       tab.setAttribute('id', 'tab-' + idx);
       tab.addEventListener('click', function () {
-        // Update all tabs
         var allTabs = document.querySelectorAll('.month-tab');
         for (var t = 0; t < allTabs.length; t++) {
           allTabs[t].classList.remove('active');
@@ -656,13 +681,13 @@ function renderResults(data) {
   var matchedPairsList = document.getElementById('matchedPairsList');
 
   // Reconciliation status badge
-  if (data.reconciliation_status === 'pass') {
+  if ((data.reconciliation_status || '').toLowerCase() === 'pass') {
     reconBadge.textContent = 'PASS';
     reconBadgeContainer.style.backgroundColor = '#f0fdf4';
     reconBadgeContainer.style.color = '#166534';
     reconBadgeContainer.style.border = '1px solid #86efac';
   } else {
-    reconBadge.textContent = 'FAIL';
+    reconBadge.textContent = 'REVIEW REQUIRED';
     reconBadgeContainer.style.backgroundColor = '#fef2f2';
     reconBadgeContainer.style.color = '#991b1b';
     reconBadgeContainer.style.border = '1px solid #fca5a5';
@@ -714,6 +739,9 @@ function renderResults(data) {
   // Render full transactions table
   renderTransactionsTable(data);
 
+  // Render separate inter-company section
+  renderInterCompanyTable(data);
+
   // Show results
   results.hidden = false;
   
@@ -740,66 +768,141 @@ function renderResults(data) {
 
 /* ---------- All Transactions Table ---------- */
 
-function classifyTxn(t) {
-  var narr = (t.narration || '').toUpperCase();
-  var isCredit = (t.credit || 0) > 0;
-  var isDebit  = (t.debit  || 0) > 0;
-  if (!isCredit && !isDebit) return 'Other';
-  var side = isCredit ? 'Credit' : 'Debit';
-  if (/\bINT\b|INTEREST/.test(narr)) return side + ' Interest';
-  if (/\bCHG\b|CHARGE/.test(narr))   return side + ' Charge';
-  return side;
-}
+var _allTxnsData = [];
 
 function renderTransactionsTable(data) {
   var section = document.getElementById('txnDetailSection');
   var tbody   = document.getElementById('txnBody');
   var tfoot   = document.getElementById('txnFoot');
   var countEl = document.getElementById('txnDetailCount');
+  var searchInput = document.getElementById('txnSearchInput');
+  if (!section || !tbody || !tfoot) return;
+
+  _allTxnsData = data.transactions || [];
+  if (_allTxnsData.length === 0) {
+    section.hidden = true;
+    return;
+  }
+
+  function redrawTable(filterQuery) {
+    tbody.innerHTML = '';
+    tfoot.innerHTML = '';
+
+    var q = (filterQuery || '').toLowerCase().trim();
+    var filtered = q ? _allTxnsData.filter(function(t) {
+      return (t.narration || '').toLowerCase().indexOf(q) !== -1 ||
+             (t.date || '').toLowerCase().indexOf(q) !== -1 ||
+             (t.type || '').toLowerCase().indexOf(q) !== -1;
+    }) : _allTxnsData;
+
+    var totalDebit  = 0;
+    var totalCredit = 0;
+
+    filtered.forEach(function (t, idx) {
+      var type = t.type || 'Other';
+      var isCredit = type.startsWith('Credit');
+      var isDebit  = type.startsWith('Debit');
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td style="text-align:center; font-family:var(--font-mono); color:var(--slate);">' + (t.s_no || (idx + 1)) + '</td>' +
+        '<td class="txn-date">'    + (t.date || '') + '</td>' +
+        '<td class="txn-narr">'    + (t.narration || '').replace(/</g,'&lt;') + '</td>' +
+        '<td class="txn-type ' + (isCredit ? 'type-credit' : isDebit ? 'type-debit' : '') + '">' + type + '</td>' +
+        '<td class="amt-debit">'   + ((t.debit  || 0) > 0 ? money(t.debit)  : '<span class="amt-zero">—</span>') + '</td>' +
+        '<td class="amt-credit">'  + ((t.credit || 0) > 0 ? money(t.credit) : '<span class="amt-zero">—</span>') + '</td>' +
+        '<td class="amt-bal">'     + (t.balance != null ? money(t.balance) : '<span class="amt-zero">—</span>') + '</td>';
+      tbody.appendChild(tr);
+      totalDebit  += (Number(t.debit)  || 0);
+      totalCredit += (Number(t.credit) || 0);
+    });
+
+    // TOTAL row in tfoot
+    var tftr = document.createElement('tr');
+    tftr.className = 'total-row';
+    tftr.innerHTML =
+      '<td colspan="4"><strong>TOTAL</strong></td>' +
+      '<td class="amt-debit"><strong>'  + money(totalDebit)  + '</strong></td>' +
+      '<td class="amt-credit"><strong>' + money(totalCredit) + '</strong></td>' +
+      '<td></td>';
+    tfoot.appendChild(tftr);
+
+    if (countEl) {
+      countEl.textContent = filtered.length.toLocaleString('en-IN') + (q ? ' of ' + _allTxnsData.length.toLocaleString('en-IN') : '') + ' txns';
+    }
+  }
+
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.oninput = function() {
+      redrawTable(searchInput.value);
+    };
+  }
+
+  redrawTable('');
+  section.hidden = false;
+}
+
+/* ---------- Inter-Company Transactions Table ---------- */
+
+function renderInterCompanyTable(data) {
+  var section = document.getElementById('interCompanySection');
+  var tbody   = document.getElementById('icBody');
+  var tfoot   = document.getElementById('icFoot');
+  var countBadge = document.getElementById('icCountBadge');
+  var debitBadge = document.getElementById('icDebitBadge');
+  var creditBadge = document.getElementById('icCreditBadge');
   if (!section || !tbody || !tfoot) return;
 
   tbody.innerHTML = '';
   tfoot.innerHTML = '';
 
-  var txns = data.transactions;
-  if (!txns || txns.length === 0) {
-    section.hidden = true;
+  var icTxns = data.inter_company_transactions || [];
+  var icSummary = data.inter_company_summary || { count: 0, total_debit: 0, total_credit: 0 };
+
+  if (countBadge) countBadge.textContent = icTxns.length + ' txns';
+  if (debitBadge) debitBadge.textContent = 'Dr: ' + money(icSummary.total_debit || 0);
+  if (creditBadge) creditBadge.textContent = 'Cr: ' + money(icSummary.total_credit || 0);
+
+  if (icTxns.length === 0) {
+    var emptyTr = document.createElement('tr');
+    emptyTr.innerHTML = '<td colspan="8" style="text-align:center; padding:1.5rem; color:#64748b; font-style:italic;">No inter-company transfer transactions detected in this statement.</td>';
+    tbody.appendChild(emptyTr);
+    section.hidden = false;
     return;
   }
 
-  var totalDebit  = 0;
+  var totalDebit = 0;
   var totalCredit = 0;
 
-  txns.forEach(function (t) {
-    var type = classifyTxn(t);
+  icTxns.forEach(function (t, idx) {
+    var type = t.type || 'Other';
     var isCredit = type.startsWith('Credit');
     var isDebit  = type.startsWith('Debit');
     var tr = document.createElement('tr');
     tr.innerHTML =
+      '<td style="text-align:center; font-family:var(--font-mono); color:var(--slate);">' + (idx + 1) + '</td>' +
       '<td class="txn-date">'    + (t.date || '') + '</td>' +
       '<td class="txn-narr">'    + (t.narration || '').replace(/</g,'&lt;') + '</td>' +
       '<td class="txn-type ' + (isCredit ? 'type-credit' : isDebit ? 'type-debit' : '') + '">' + type + '</td>' +
       '<td class="amt-debit">'   + ((t.debit  || 0) > 0 ? money(t.debit)  : '<span class="amt-zero">—</span>') + '</td>' +
       '<td class="amt-credit">'  + ((t.credit || 0) > 0 ? money(t.credit) : '<span class="amt-zero">—</span>') + '</td>' +
-      '<td class="amt-bal">'     + (t.balance != null ? money(t.balance) : '<span class="amt-zero">—</span>') + '</td>';
+      '<td class="amt-bal">'     + (t.balance != null ? money(t.balance) : '<span class="amt-zero">—</span>') + '</td>' +
+      '<td><span class="txn-type" style="background:#f0fdf4; color:#166534; font-weight:600;">Inter-Company</span></td>';
     tbody.appendChild(tr);
-    totalDebit  += (t.debit  || 0);
-    totalCredit += (t.credit || 0);
+    totalDebit  += (Number(t.debit)  || 0);
+    totalCredit += (Number(t.credit) || 0);
   });
 
   // TOTAL row in tfoot
   var tftr = document.createElement('tr');
   tftr.className = 'total-row';
   tftr.innerHTML =
-    '<td colspan="3"><strong>TOTAL</strong></td>' +
+    '<td colspan="4"><strong>TOTAL INTER-COMPANY</strong></td>' +
     '<td class="amt-debit"><strong>'  + money(totalDebit)  + '</strong></td>' +
     '<td class="amt-credit"><strong>' + money(totalCredit) + '</strong></td>' +
-    '<td></td>';
+    '<td colspan="2"></td>';
   tfoot.appendChild(tftr);
 
-  if (countEl) {
-    countEl.textContent = txns.length.toLocaleString('en-IN') + ' transactions';
-  }
   section.hidden = false;
 }
 
@@ -807,11 +910,9 @@ function scrollRowIntoView(idx) {
   var row = ledgerBody.children[idx];
   if (!row) return;
   
-  // Fallback for older Safari that doesn't support smooth scrollIntoView
   try {
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
   } catch (e) {
-    // Fallback: manual scroll
     row.scrollIntoView(true);
   }
 }
@@ -858,10 +959,19 @@ startOverBtn.addEventListener('click', function () {
   if (txnBody) txnBody.innerHTML = '';
   var txnFoot = document.getElementById('txnFoot');
   if (txnFoot) txnFoot.innerHTML = '';
+
+  // Clear inter-company table
+  var icSection = document.getElementById('interCompanySection');
+  if (icSection) icSection.hidden = true;
+  var icBody = document.getElementById('icBody');
+  if (icBody) icBody.innerHTML = '';
+  var icFoot = document.getElementById('icFoot');
+  if (icFoot) icFoot.innerHTML = '';
   
   // Scroll back to top
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
+
 
 /* ---------- Errors & Warnings ---------- */
 

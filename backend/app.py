@@ -21,7 +21,7 @@ import uuid
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from excel.exporter import export_to_excel, summarize
+from excel.exporter import export_to_excel, summarize, summarize_combined
 from parser.parser_manager import UnsupportedBankError, parse_statement, parse_text_statement, PARSERS
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -93,69 +93,56 @@ def cleanup_old_uploads(max_age_seconds=3600):
         pass
 
 
-def filter_and_recalculate_transactions(transactions, skip_keyword_intercompany=False):
+def classify_transactions(transactions, inter_company_keywords=None, skip_keyword_intercompany=False):
+    """
+    Classify and flag transactions. Does NOT remove any transaction.
+
+    - Adds 'type' field: Credit | Debit | Credit Interest | Debit Interest |
+                         Credit Charge | Debit Charge
+    - Adds 'inter_company' float (amount if matched, else 0.0)
+    - Adds 'is_inter_company' bool
+    - Charge transactions (CHG/fee/gst etc.) are tagged but NOT removed —
+      they remain in the full list so the user can see them.
+
+    inter_company_keywords: list of lowercase strings that identify an
+    inter-company narration. Defaults to project-default names below.
+    """
     import re
-    
-    def is_charge_transaction(narration):
-        if not narration:
-            return False
-        narration_lower = narration.lower()
-        keywords = ["chg", "charge", "fee", "tax", "gst", "commission", "folio amt"]
-        if any(k in narration_lower for k in keywords):
-            return True
-        if re.search(r"\bsc\b", narration_lower):
-            return True
-        return False
 
-    def is_inter_company_transaction(narration):
-        if not narration:
-            return False
-        narration_lower = narration.lower()
+    if inter_company_keywords is None:
+        # Default inter-company entity names (user-configurable via query param)
         inter_company_keywords = ["lakshmi", "senthil", "mahalakshmi"]
-        return any(k in narration_lower for k in inter_company_keywords)
 
-    filtered = []
+    INTEREST_RE = re.compile(r"\bINT\b|INTEREST", re.IGNORECASE)
+    CHARGE_RE   = re.compile(r"\bCHG\b|CHARGE|\bFEE\b|\bTAX\b|\bGST\b|COMMISSION|FOLIO AMT|\bSC\b", re.IGNORECASE)
+
     for t in transactions:
-        narration = t.get("narration", "")
-        debit = t.get("debit") or 0.0
+        narration = t.get("narration") or ""
+        debit  = t.get("debit")  or 0.0
         credit = t.get("credit") or 0.0
-        
-        # Remove charges
-        if is_charge_transaction(narration):
-            continue
-            
-        # Inter-company logic
-        if not skip_keyword_intercompany and is_inter_company_transaction(narration):
-            # Deposits are accepted (kept)
-            if credit > 0:
-                filtered.append(t)
-            # Withdrawals are removed (skipped)
-            elif debit > 0:
-                continue
-            else:
-                filtered.append(t)
+
+        # ---- Determine type ----
+        side = "Credit" if credit > 0 else ("Debit" if debit > 0 else "Other")
+        if INTEREST_RE.search(narration):
+            t["type"] = f"{side} Interest" if side != "Other" else "Other"
+        elif CHARGE_RE.search(narration):
+            t["type"] = f"{side} Charge" if side != "Other" else "Other"
         else:
-            filtered.append(t)
+            t["type"] = side
 
-    # Recalculate running balance
-    if filtered:
-        # Find first transaction with a balance to act as the starting point
-        start_idx = -1
-        for i, t in enumerate(filtered):
-            if t.get("balance") is not None:
-                start_idx = i
-                break
-        
-        if start_idx != -1:
-            curr_balance = filtered[start_idx]["balance"]
-            for idx in range(start_idx + 1, len(filtered)):
-                t = filtered[idx]
-                debit = t.get("debit") or 0.0
-                credit = t.get("credit") or 0.0
-                curr_balance = round(curr_balance - debit + credit, 2)
-                t["balance"] = curr_balance
+        # ---- Inter-company flag ----
+        narration_lower = narration.lower()
+        is_ic = (not skip_keyword_intercompany and
+                 any(k in narration_lower for k in inter_company_keywords))
+        t["is_inter_company"] = is_ic
+        t["inter_company"] = (debit or credit) if is_ic else 0.0
 
-    return filtered
+    return transactions
+
+
+def filter_charges(transactions):
+    """Return transactions excluding Charge-type rows (for summary display)."""
+    return [t for t in transactions if "Charge" not in t.get("type", "")]
 
 
 def extract_printed_totals_from_pdf(pdf_path):
@@ -591,55 +578,91 @@ def analyze():
         txns_A = statements_data[0][2]
         txns_B = statements_data[1][2]
         txns_A, txns_B, matched_pairs = find_inter_company_transactions(txns_A, txns_B)
-        
-        # Apply filters (GST/charges), skipping keyword-based intercompany filtering
-        filtered_A = filter_and_recalculate_transactions(txns_A, skip_keyword_intercompany=True)
-        filtered_B = filter_and_recalculate_transactions(txns_B, skip_keyword_intercompany=True)
-        
-        if not filtered_A and not filtered_B:
-            return jsonify({"error": "All transactions in both statements were filtered out."}), 422
-            
-        combined_summary = summarize_combined(filtered_A, filtered_B)
-        
+
+        # Classify (flag types & inter-company — do NOT remove any transactions)
+        classify_transactions(txns_A, skip_keyword_intercompany=True)
+        classify_transactions(txns_B, skip_keyword_intercompany=True)
+
+        if not txns_A and not txns_B:
+            return jsonify({"error": "No transactions found in either statement."}), 422
+
+        combined_summary = summarize_combined(txns_A, txns_B)
+
         xlsx_name = f"{job_id}_consolidated.xlsx"
         xlsx_path = os.path.join(UPLOAD_DIR, xlsx_name)
-        export_to_excel(filtered_A, xlsx_path, transactions_B=filtered_B, matched_pairs=matched_pairs, unreconciled_logs=unreconciled_logs_all)
-        
-        bank_name = f"Consolidated ({statements_data[0][1]} & {statements_data[1][1]})"
-        total_txns_count = len(filtered_A) + len(filtered_B)
+        bank_name_str = f"Consolidated ({statements_data[0][1]} & {statements_data[1][1]})"
+        export_to_excel(txns_A, xlsx_path, transactions_B=txns_B,
+                        matched_pairs=matched_pairs,
+                        unreconciled_logs=unreconciled_logs_all,
+                        bank_name=bank_name_str)
+
+        bank_name = bank_name_str
+        all_txns_flat = txns_A + txns_B
+        total_txns_count = len(all_txns_flat)
     else:
         # Single statement
         bank_key, bank_display_name, txns, _ = statements_data[0]
-        filtered_txns = filter_and_recalculate_transactions(txns, skip_keyword_intercompany=False)
-        if not filtered_txns:
-            return jsonify({"error": "All transactions were filtered out based on the removal rules."}), 422
-            
-        combined_summary = summarize_combined(filtered_txns)
-        
+
+        # Classify (flag types & inter-company — do NOT remove any transactions)
+        classify_transactions(txns, skip_keyword_intercompany=False)
+
+        if not txns:
+            return jsonify({"error": "No transactions were parsed from the statement."}), 422
+
+        combined_summary = summarize_combined(txns)
+
         xlsx_name = f"{job_id}_monthwise.xlsx"
         xlsx_path = os.path.join(UPLOAD_DIR, xlsx_name)
-        export_to_excel(filtered_txns, xlsx_path, matched_pairs=[], unreconciled_logs=unreconciled_logs_all)
-        
-        bank_name = bank_display_name
-        total_txns_count = len(filtered_txns)
+        export_to_excel(txns, xlsx_path, matched_pairs=[],
+                        unreconciled_logs=unreconciled_logs_all,
+                        bank_name=bank_display_name)
 
-    # Serialize transactions for frontend display
+        bank_name = bank_display_name
+        all_txns_flat = txns
+        total_txns_count = len(txns)
+
+    # ---- Opening / Closing balance ----
+    def _opening_balance(txn_list):
+        for t in txn_list:
+            if t.get("balance") is not None:
+                return t["balance"]
+        return None
+
+    def _closing_balance(txn_list):
+        for t in reversed(txn_list):
+            if t.get("balance") is not None:
+                return t["balance"]
+        return None
+
+    opening_bal = _opening_balance(all_txns_flat)
+    closing_bal = _closing_balance(all_txns_flat)
+
+    # ---- Serialize transactions for frontend ----
     def serialize_txns(txns):
         result = []
-        for t in txns:
+        for idx, t in enumerate(txns, start=1):
             result.append({
+                "s_no": idx,
                 "date": t["date"].strftime("%d-%m-%Y") if hasattr(t.get("date"), "strftime") else str(t.get("date", "")),
                 "narration": t.get("narration") or "",
+                "type": t.get("type") or "Other",
                 "debit": t.get("debit") or 0.0,
                 "credit": t.get("credit") or 0.0,
                 "balance": t.get("balance"),
+                "is_inter_company": t.get("is_inter_company", False),
+                "inter_company": t.get("inter_company", 0.0),
             })
         return result
 
-    if len(statements_data) == 2:
-        all_txns_serialized = serialize_txns(filtered_A) + serialize_txns(filtered_B)
-    else:
-        all_txns_serialized = serialize_txns(filtered_txns)
+    all_txns_serialized = serialize_txns(all_txns_flat)
+
+    # ---- Inter-company summary ----
+    ic_txns = [t for t in all_txns_serialized if t["is_inter_company"]]
+    ic_summary = {
+        "count": len(ic_txns),
+        "total_debit": round(sum(t["debit"] for t in ic_txns), 2),
+        "total_credit": round(sum(t["credit"] for t in ic_txns), 2),
+    }
 
     return jsonify({
         "bank": bank_name,
@@ -647,6 +670,10 @@ def analyze():
         "download_url": f"/api/download/{xlsx_name}",
         "summary": combined_summary,
         "transactions": all_txns_serialized,
+        "inter_company_transactions": ic_txns,
+        "inter_company_summary": ic_summary,
+        "opening_balance": opening_bal,
+        "closing_balance": closing_bal,
         "reconciliation_status": reconciliation_status,
         "unreconciled_transactions": unreconciled_logs_all,
         "inter_company_matches": matched_pairs,
@@ -659,9 +686,8 @@ def download(filename):
     if not filename.endswith(".xlsx") or "/" in filename or "\\" in filename:
         return jsonify({"error": "Invalid filename."}), 400
     response = send_from_directory(UPLOAD_DIR, filename, as_attachment=True,
-                                    download_name="statement_monthwise.xlsx")
-    # Ensure proper Content-Disposition for mobile downloads
-    response.headers["Content-Disposition"] = 'attachment; filename="statement_monthwise.xlsx"'
+                                    download_name="Bank_Statement_Analysis.xlsx")
+    response.headers["Content-Disposition"] = 'attachment; filename="Bank_Statement_Analysis.xlsx"'
     response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     return response
 

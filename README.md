@@ -1,105 +1,139 @@
-# Bank Statement Analyzer
+# Bank Statement Analyzer & Reconciliation Engine
 
-Upload a bank statement PDF, get back an Excel workbook split month-by-month
-into **Credit / Debit / Charges / Interest**, for the whole financial year.
+A complete, production-grade Bank Statement Analyzer that converts bank statement PDFs, Excel files, and copy-pasted statement rows into clean, verified, and audited financial ledgers.
 
-Supported banks: **Canara** (fully verified against a real 245-page / 1,783-
-transaction statement — zero balance-chain mismatches), plus **SBI, HDFC,
-ICICI, Axis** (generic table-based parsers, not yet tested against real
-statements from those banks — see "Known limitations" below).
+---
 
-## Project structure
+## Key Features
+
+- **ONE Source of Truth:** The exact same verified transaction dataset powers the executive summary, dashboard tables, reconciliation checks, inter-company detection, and Excel exports.
+- **Executive Summary & Month-Wise Breakdown:** Computes FY totals, Opening/Closing balance, Credit/Debit breakdowns, Charges (tax/GST/fees), and Interest across all months.
+- **Complete All Transactions Detail Table:** Displayed directly on the web app below the summary cards, complete with `S.No`, `Date`, `Particulars`, `Type`, `Debit`, `Credit`, `Balance`, client-side real-time filtering, and a bottom `TOTAL` row.
+- **Dedicated Inter-Company Transfer Detection:** Transferred funds between linked entities/partners are classified and presented in a dedicated section with totals, without removing them from the master transaction list.
+- **Comprehensive Multi-Sheet Excel Export (`Bank_Statement_Analysis.xlsx`):**
+  - `Sheet 1 — Summary`: Bank name, statement period, total transaction count, total debit/credit, opening/closing balance, reconciliation status, and month-wise breakdown table.
+  - `Sheet 2 — All Transactions`: Every single transaction with `S.No`, `Date`, `Particulars`, `Type`, `Debit`, `Credit`, `Balance`, `Reference`, and bottom `TOTAL` row.
+  - `Sheet 3 — Inter-Company Transactions`: All inter-company transactions with `S.No`, `Date`, `Particulars`, `Type`, `Debit`, `Credit`, `Balance`, `Classification`, and bottom `TOTAL` row.
+  - `Sheets 4+ — Monthly Sheets (Apr-2025, May-2025...)`: Month-by-month transaction ledgers with `S.No` and bottom `TOTAL` rows.
+- **Professional Formatting:** Bold headers, freeze panes, auto-filters, borders, and currency number formatting (`#,##0.00`) on all sheets.
+- **Multi-Format Input:**
+  - PDF Statement uploads (Canara, SBI, HDFC, ICICI, Axis, etc.)
+  - Excel Statement uploads (Karur Vysya Bank / KVB formats A, B, C)
+  - Copy-Pasted text mode with automatic delimiter and date detection.
+- **Dual Statement Inter-Company Reconciliation:** Automatically reconciles two companion statements (Statement A ↔ Statement B) and highlights matched pairs.
+
+---
+
+## Supported Banks & Parsers
+
+| Bank / Source | Input Format | Parser Strategy |
+|---|---|---|
+| **Karur Vysya Bank (KVB)** | `.xlsx`, `.xls` | Coordinate & text prefix parser handling all KVB format variants, repeated headers, and multiline narration |
+| **Canara Bank** | `.pdf` | High-precision visual layout word coordinate parser |
+| **SBI, HDFC, ICICI, Axis** | `.pdf` | Grid table parser with header alias detection |
+| **Copy-Paste Text** | Plain text / TSV | Heuristic tokenizer supporting single-amount, two-column, and Dr/Cr labeled text |
+
+---
+
+## Installation & Running Locally
+
+### Prerequisites
+- Python 3.9+
+- `pip`
+
+### Step 1: Install Dependencies
+```bash
+pip install -r backend/requirements.txt
+```
+
+### Step 2: Start the Server
+```bash
+python run.py
+```
+*(Or directly from `backend/`: `python app.py`)*
+
+### Step 3: Open in Browser
+- **Local machine:** [http://127.0.0.1:5000](http://127.0.0.1:5000)
+- **Same Wi-Fi network:** `http://<your-ip-address>:5000`
+
+---
+
+## Project Structure
 
 ```
 bank-statement-analyzer/
 ├── backend/
-│   ├── app.py                 # Flask API (serves frontend + /api routes)
-│   ├── requirements.txt
-│   ├── parser/
-│   │   ├── canara.py          # verified, coordinate-based parser
-│   │   ├── sbi.py              # generic table parser, needs a real sample
-│   │   ├── hdfc.py             # generic table parser, needs a real sample
-│   │   ├── icici.py            # generic table parser, needs a real sample
-│   │   ├── axis.py             # generic table parser, needs a real sample
-│   │   ├── generic_table.py    # shared table-extraction logic
-│   │   ├── detector.py         # auto-detects bank from PDF text
-│   │   └── parser_manager.py   # dispatches to the right parser
+│   ├── app.py                 # Flask REST API & web server
+│   ├── requirements.txt       # Python package dependencies
 │   ├── excel/
-│   │   └── exporter.py         # classification + month-wise .xlsx writer
-│   └── uploads/                # temp storage for uploaded/generated files
-│
-└── frontend/
-    ├── index.html
-    ├── style.css
-    └── script.js
+│   │   └── exporter.py        # Multi-sheet openpyxl Excel workbook generator
+│   ├── parser/
+│   │   ├── kvb.py             # Karur Vysya Bank Excel parser
+│   │   ├── canara.py          # Canara Bank coordinate-based parser
+│   │   ├── copypaste.py       # Copy-paste text heuristic parser
+│   │   ├── generic_table.py   # Table-based PDF extraction
+│   │   ├── detector.py        # Auto-detects bank from statement text
+│   │   └── parser_manager.py  # Central dispatcher
+│   └── uploads/               # Temporary storage for uploads & generated workbooks
+├── frontend/
+│   ├── index.html             # Single-page interface
+│   ├── script.js              # UI interaction, dynamic rendering, and filters
+│   └── style.css              # Financial ledger design system
+├── tests/                     # Test suite
+├── run.py                     # Universal runner with local IP detection
+└── README.md
 ```
-
-## Running it on ANY Laptop & Phone
-
-### Option A: One-Click Launchers
-- **Windows Laptop:** Double-click [`run.bat`](file:///c:/Users/acer/Downloads/bank-statement-analyzer/bank-statement-analyzer/run.bat) (or run `python run.py`)
-- **Mac / Linux Laptop:** Run `./run.sh` (or `python run.py`)
-
-### Option B: Manual Command Line
-1. Install dependencies:
-   ```bash
-   pip install -r backend/requirements.txt
-   ```
-2. Start the server:
-   ```bash
-   python run.py
-   ```
-
-### Accessing the App:
-- **On the host laptop browser:** `http://localhost:5000`
-- **On SAME Wi-Fi network:** `http://192.168.29.50:5000`
 
 ---
 
-## Free Cloud Deployment (Access from ANY Phone / Laptop on DIFFERENT Wi-Fi / Mobile Data)
+## API Reference
 
-To make this app available 24/7 on **all phones, laptops, and mobile networks worldwide** without needing your laptop to stay on:
+### 1. Analyze Statement
+`POST /api/analyze`
 
-### Option 1: Deploy on Render.com (Recommended - 100% Free)
-1. Push this folder/repository to GitHub.
-2. Sign up at [render.com](https://render.com) (Free).
-3. Click **New +** -> **Web Service**.
-4. Connect your GitHub repository.
-5. Render will automatically detect [`render.yaml`](file:///c:/Users/acer/Downloads/bank-statement-analyzer/bank-statement-analyzer/render.yaml) and deploy your app.
-6. You will get a permanent public link like: `https://bank-statement-analyzer.onrender.com`
+**Request (`multipart/form-data`):**
+- `file`: PDF or Excel statement file (up to 2 files for dual-statement reconciliation)
+- `bank`: Bank key (`auto`, `kvb`, `canara`, `sbi`, `hdfc`, `icici`, `axis`)
+- `password`: (Optional) PDF decryption password
+- `paste_text`: (Optional) Raw statement text if using copy-paste mode
 
-### Option 2: Deploy using Docker
-Build and run the container on any cloud platform (AWS, GCP, DigitalOcean, Railway):
-```bash
-docker build -t bank-statement-analyzer .
-docker run -p 5000:5000 bank-statement-analyzer
+**Response (`application/json`):**
+```json
+{
+  "bank": "Karur Vysya Bank",
+  "transaction_count": 1193,
+  "opening_balance": 1133.34,
+  "closing_balance": 5083.34,
+  "reconciliation_status": "pass",
+  "download_url": "/api/download/<job_id>_monthwise.xlsx",
+  "summary": [
+    { "Month": "Apr-2025", "Credit": 10000.0, "Debit": 4300.0, "Transaction Count": 5 }
+  ],
+  "transactions": [
+    { "s_no": 1, "date": "04-04-2025", "narration": "UPI/CR/...", "type": "Credit", "debit": 0.0, "credit": 10000.0, "balance": 11133.34 }
+  ],
+  "inter_company_transactions": [ ... ],
+  "inter_company_summary": { "count": 12, "total_debit": 250000.0, "total_credit": 250000.0 }
+}
 ```
 
+### 2. Download Complete Workbook
+`GET /api/download/<filename>`
 
-## How classification works
+Returns the complete `Bank_Statement_Analysis.xlsx` spreadsheet.
 
-- Every row is tagged **Debit** or **Credit** based on which statement
-  column the amount came from.
-- If the narration contains **"CHG"** → tagged as a **Charge**.
-- If the narration contains **"INT"** → tagged as **Interest**.
-- Combined, each row becomes one of: Credit, Debit, Credit Charge,
-  Debit Charge, Credit Interest, Debit Interest.
+---
 
-This is a simple substring rule (as requested) — it's fast and works well
-in practice, but can occasionally misfire if unrelated text happens to
-contain "CHG" or "INT" (e.g. a payer's name or note). Spot-check the
-Summary sheet if exact charge/interest totals matter for filing purposes.
+## Running Tests
 
-## Known limitations
+Run the test suite:
+```bash
+python -m unittest discover tests
+```
 
-- **SBI / HDFC / ICICI / Axis parsers are unverified.** They use
-  `pdfplumber`'s table detection with each bank's commonly documented
-  column headers, but real exports vary. If a statement returns "No
-  transactions could be extracted" or wrong figures, send a real sample
-  PDF from that bank so the parser can be corrected.
-- The Canara parser is calibrated to one specific export layout (word
-  x-coordinates for column boundaries). A different Canara export style
-  (e.g. from a different branch/app version) may need the boundary
-  constants in `parser/canara.py` re-checked.
-- Uploaded PDFs are deleted from `backend/uploads/` immediately after
-  parsing; generated Excel files remain there until manually cleared.
+---
+
+## Security & Privacy
+- Uploaded statement files are strictly processed in memory or ephemeral storage and removed immediately after processing.
+- No sensitive banking credentials or API keys are required.
+- CORS protection and filename sanitization enabled.

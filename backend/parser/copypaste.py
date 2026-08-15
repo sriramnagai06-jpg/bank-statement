@@ -247,20 +247,25 @@ def parse_line_heuristically(line):
     last_idx = len(cleaned)
     for m in reversed(matches):
         start, end = m.start(), m.end()
-        interstitial = cleaned[end:last_idx]
-        if re.search(r'[a-zA-Z]', interstitial):
+        interstitial = cleaned[end:last_idx].strip()
+        # Allow empty, punctuation, or Dr/Cr labels between amounts
+        interstitial_without_labels = re.sub(r'\b(cr|dr|cr\.|dr\.|credit|debit|\+|-)\b', '', interstitial, flags=re.IGNORECASE).strip()
+        if re.search(r'[a-zA-Z]', interstitial_without_labels):
             break
-            
+
         s = m.group(0).replace(',', '')
         if '.' not in s and len(s) >= 8:
             break
-            
+
         try:
             val = float(s)
-            valid_amounts.insert(0, (val, start, end))
+            is_dr = bool(re.search(r'\b(dr|dr\.|debit)\b', interstitial, re.IGNORECASE))
+            is_cr = bool(re.search(r'\b(cr|cr\.|credit)\b', interstitial, re.IGNORECASE))
+            valid_amounts.insert(0, (val, start, end, is_dr, is_cr))
             last_idx = start
         except ValueError:
             break
+
             
     if not valid_amounts:
         return {
@@ -284,19 +289,22 @@ def parse_line_heuristically(line):
     orig_lower = original_line.lower()
     is_bal_row = any(k in narr_lower for k in ['closing balance', 'opening balance', 'brought forward', 'b/f', 'balance b/d', 'balance c/f', 'balance c/d', 'bal b/f'])
     
-    # Check explicit Dr/Cr labels anywhere in the original line
-    has_explicit_cr = bool(re.search(r'\b(cr|credit|credited|deposit|received|int|interest|\+)\b', orig_lower))
-    has_explicit_dr = bool(re.search(r'\b(dr|debit|debited|withdrawal|wdl|paid|sent|transfer out|-)\b', orig_lower))
-    
+    # Check explicit Dr/Cr labels directly associated with amount or anywhere in line
+    has_explicit_cr = bool(re.search(r'\b(cr|cr\.|credit|credited|deposit|received|interest)\b', orig_lower))
+    has_explicit_dr = bool(re.search(r'\b(dr|dr\.|debit|debited|withdrawal|wdl|paid|sent|transfer out)\b', orig_lower))
+
+    amt1_is_dr = valid_amounts[0][3] if len(valid_amounts[0]) > 3 else False
+    amt1_is_cr = valid_amounts[0][4] if len(valid_amounts[0]) > 4 else False
+
     if len(amount_vals) == 1:
         val = amount_vals[0]
         if is_bal_row:
             balance = val
-        elif has_explicit_cr and not has_explicit_dr:
+        elif amt1_is_cr or (has_explicit_cr and not has_explicit_dr):
             credit = val
-        elif has_explicit_dr and not has_explicit_cr:
+        elif amt1_is_dr or (has_explicit_dr and not has_explicit_cr):
             debit = val
-        elif any(w in narr_lower for w in ['credit', 'deposit', 'from', 'int', 'interest', 'received']):
+        elif any(w in narr_lower for w in ['credit', 'deposit', 'from', 'interest', 'received']):
             credit = val
         else:
             debit = val
@@ -305,7 +313,7 @@ def parse_line_heuristically(line):
         if is_bal_row:
             balance = val2
         else:
-            if (has_explicit_cr and not has_explicit_dr) or any(w in narr_lower for w in ['credit', 'deposit', 'from', 'int', 'interest', 'received']):
+            if amt1_is_cr or (has_explicit_cr and not has_explicit_dr) or any(w in narr_lower for w in ['credit', 'deposit', 'from', 'interest', 'received']):
                 credit = val1
             else:
                 debit = val1
@@ -314,6 +322,7 @@ def parse_line_heuristically(line):
         debit = amount_vals[0]
         credit = amount_vals[1]
         balance = amount_vals[2]
+
         
     return {
         "date": dt,
@@ -359,26 +368,31 @@ def preprocess_raw_text(text):
 def adjust_transaction_years(transactions):
     if not transactions:
         return transactions
-        
+
+    # Filter out entries with invalid/missing date
+    valid_txns = [t for t in transactions if t.get("date") is not None and hasattr(t["date"], "month")]
+    if not valid_txns:
+        return transactions
+
     # Standardize years so they form a continuous chronological chain
     current_year = datetime.now().year
-    last_month = transactions[-1]["date"].month
+    last_month = valid_txns[-1]["date"].month
     current_month = datetime.now().month
-    
+
     base_last_year = current_year
     if last_month > current_month:
         base_last_year = current_year - 1
-        
+
     curr_yr = base_last_year
-    transactions[-1]["date"] = transactions[-1]["date"].replace(year=curr_yr)
-    
-    for idx in range(len(transactions) - 2, -1, -1):
-        prev_m = transactions[idx]["date"].month
-        curr_m = transactions[idx + 1]["date"].month
+    valid_txns[-1]["date"] = valid_txns[-1]["date"].replace(year=curr_yr)
+
+    for idx in range(len(valid_txns) - 2, -1, -1):
+        prev_m = valid_txns[idx]["date"].month
+        curr_m = valid_txns[idx + 1]["date"].month
         if prev_m > curr_m:
             curr_yr -= 1
-        transactions[idx]["date"] = transactions[idx]["date"].replace(year=curr_yr)
-        
+        valid_txns[idx]["date"] = valid_txns[idx]["date"].replace(year=curr_yr)
+
     return transactions
 
 
@@ -386,23 +400,35 @@ def parse_text(raw_text):
     """Parse raw text blocks into standardized transactions list."""
     if not raw_text or not raw_text.strip():
         return []
-        
+
     # Preprocess single-line pastes that contain multiple transactions
     raw_text = preprocess_raw_text(raw_text)
-        
+
     lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
-    
+
     table_txns = try_parse_as_table(lines)
     if table_txns:
         return adjust_transaction_years(table_txns)
-        
+
     transactions = []
     for line in lines:
-        txn = parse_line_heuristically(line)
-        if txn:
-            transactions.append(txn)
-            
+        dt, _ = extract_date_and_clean_line(line)
+        if dt is None and transactions:
+            # If line has no date and no amounts, merge as continuation of previous narration
+            txn = parse_line_heuristically(line)
+            if txn and txn.get("date"):
+                transactions.append(txn)
+            else:
+                cleaned_narration = re.sub(r'[\r\n\t]+', ' ', line).strip()
+                if cleaned_narration and not any(k in cleaned_narration.lower() for k in ['page ', 'statement summary', 'total debit', 'total credit', 'closing bal']):
+                    transactions[-1]["narration"] += " " + cleaned_narration
+        else:
+            txn = parse_line_heuristically(line)
+            if txn:
+                transactions.append(txn)
+
     return adjust_transaction_years(transactions)
+
 
 def parse(file_path, password=None):
     """File-based wrapper for copypaste parser."""

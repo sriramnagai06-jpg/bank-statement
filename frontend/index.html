@@ -135,6 +135,34 @@
       </div>
     </div>
 
+    <!-- Executive Summary Cards -->
+    <div class="summary-metrics-grid" id="summaryMetricsGrid">
+      <div class="metric-card">
+        <span class="metric-label">Opening Balance</span>
+        <span class="metric-val" id="metricOpeningBal">—</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Total Debit (Withdrawals)</span>
+        <span class="metric-val amt-debit" id="metricTotalDebit">—</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Total Credit (Deposits)</span>
+        <span class="metric-val amt-credit" id="metricTotalCredit">—</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Closing Balance</span>
+        <span class="metric-val" id="metricClosingBal">—</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Total Transactions</span>
+        <span class="metric-val" id="metricTxnCount">—</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Reconciliation</span>
+        <span class="metric-val" id="metricReconStatus">—</span>
+      </div>
+    </div>
+
     <div class="month-tabs" id="monthTabs" role="tablist" aria-label="Filter by month"></div>
 
     <div class="ledger-table-wrap" id="tableWrap">
@@ -189,15 +217,22 @@
     <!-- All Transactions Detail Table -->
     <div class="txn-detail-section" id="txnDetailSection" style="margin-top:2rem;" hidden>
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
-        <h3 style="font-family:Fraunces,serif; font-size:1.25rem; margin:0; color:#1e1e1e;">All Transactions</h3>
-        <span class="txn-detail-count" id="txnDetailCount"></span>
+        <div>
+          <h3 style="font-family:Fraunces,serif; font-size:1.25rem; margin:0; color:#1e1e1e;">All Transactions</h3>
+          <p style="margin:0.2rem 0 0 0; font-size:0.8rem; color:#64748b;">Complete verified transaction dataset (ONE source of truth)</p>
+        </div>
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <input type="text" id="txnSearchInput" placeholder="Filter transactions…" style="padding:0.35rem 0.6rem; font-size:0.82rem; border:1px solid #cbd5e1; border-radius:4px;" />
+          <span class="txn-detail-count" id="txnDetailCount"></span>
+        </div>
       </div>
       <div class="ledger-table-wrap" id="txnTableWrap">
         <table class="ledger-table" id="txnTable">
           <thead>
             <tr>
+              <th style="width:48px; text-align:center;">S.No</th>
               <th>Date</th>
-              <th>Narration</th>
+              <th>Particulars</th>
               <th>Type</th>
               <th>Debit</th>
               <th>Credit</th>
@@ -210,8 +245,41 @@
       </div>
     </div>
 
+    <!-- Inter-Company Transactions Section -->
+    <div class="txn-detail-section" id="interCompanySection" style="margin-top:2.5rem;" hidden>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
+        <div>
+          <h3 style="font-family:Fraunces,serif; font-size:1.25rem; margin:0; color:#0f5c4d;">Inter-Company Transactions</h3>
+          <p style="margin:0.2rem 0 0 0; font-size:0.8rem; color:#64748b;">Separate classification of transfers between linked entities / partners</p>
+        </div>
+        <div class="ic-badges-wrap" style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+          <span class="txn-detail-count" id="icCountBadge">0 txns</span>
+          <span class="txn-detail-count amt-debit" id="icDebitBadge">Dr: 0.00</span>
+          <span class="txn-detail-count amt-credit" id="icCreditBadge">Cr: 0.00</span>
+        </div>
+      </div>
+      <div class="ledger-table-wrap" id="icTableWrap">
+        <table class="ledger-table" id="icTable">
+          <thead>
+            <tr>
+              <th style="width:48px; text-align:center;">S.No</th>
+              <th>Date</th>
+              <th>Particulars</th>
+              <th>Type</th>
+              <th>Debit</th>
+              <th>Credit</th>
+              <th>Balance</th>
+              <th>Classification</th>
+            </tr>
+          </thead>
+          <tbody id="icBody"></tbody>
+          <tfoot id="icFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
     <div class="results-actions">
-      <a id="downloadBtn" class="btn-primary" download>Download Excel</a>
+      <a id="downloadBtn" class="btn-primary" download>Download Complete Excel Workbook</a>
       <button type="button" id="startOverBtn" class="btn-ghost">Analyze another statement</button>
     </div>
   </section>
