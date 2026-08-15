@@ -479,6 +479,19 @@ def analyze():
     if text_content and text_content.strip():
         try:
             bank_key, bank_display_name, txns = parse_text_statement(text_content, forced_bank=forced_bank)
+            if not txns:
+                return jsonify({
+                    "error": (
+                        "No transactions could be parsed from the pasted text. "
+                        "Please make sure each line starts with a date (e.g. 12/08/2026 or 13-Aug-2026) "
+                        "followed by a narration and amount. "
+                        "Use Dr / Cr labels for best accuracy. "
+                        "Supported formats:\n"
+                        "  • Date  Narration  Debit  Credit  Balance (space/tab-separated)\n"
+                        "  • Date Narration Dr/Cr Amount\n"
+                        "  • Tab-separated with a header row (Date, Narration, Debit, Credit, Balance)"
+                    )
+                }), 422
             txns, status, logs, warn = reconcile_transactions(txns)
             if status == "fail":
                 reconciliation_status = "fail"
@@ -610,11 +623,30 @@ def analyze():
         bank_name = bank_display_name
         total_txns_count = len(filtered_txns)
 
+    # Serialize transactions for frontend display
+    def serialize_txns(txns):
+        result = []
+        for t in txns:
+            result.append({
+                "date": t["date"].strftime("%d-%m-%Y") if hasattr(t.get("date"), "strftime") else str(t.get("date", "")),
+                "narration": t.get("narration") or "",
+                "debit": t.get("debit") or 0.0,
+                "credit": t.get("credit") or 0.0,
+                "balance": t.get("balance"),
+            })
+        return result
+
+    if len(statements_data) == 2:
+        all_txns_serialized = serialize_txns(filtered_A) + serialize_txns(filtered_B)
+    else:
+        all_txns_serialized = serialize_txns(filtered_txns)
+
     return jsonify({
         "bank": bank_name,
         "transaction_count": total_txns_count,
         "download_url": f"/api/download/{xlsx_name}",
         "summary": combined_summary,
+        "transactions": all_txns_serialized,
         "reconciliation_status": reconciliation_status,
         "unreconciled_transactions": unreconciled_logs_all,
         "inter_company_matches": matched_pairs,

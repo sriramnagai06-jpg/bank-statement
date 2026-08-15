@@ -806,3 +806,186 @@ textarea#pasteInput::placeholder {
     border: 2px solid ButtonText;
   }
 }
+
+/* ============================================================
+   Paste / Input Mode Tabs
+   ============================================================ */
+
+.mode-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.1rem;
+  border-bottom: 2px solid var(--rule);
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--slate);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s;
+  letter-spacing: 0.01em;
+}
+
+.mode-tab:hover {
+  color: var(--ink-navy);
+}
+
+.mode-tab.active {
+  color: var(--brass-deep);
+  border-bottom-color: var(--brass);
+  font-weight: 600;
+}
+
+/* ============================================================
+   Paste Zone
+   ============================================================ */
+
+.paste-zone {
+  width: 100%;
+}
+
+.paste-zone textarea {
+  width: 100%;
+  min-height: 160px;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--ink-navy);
+  background: rgba(22, 35, 61, 0.04);
+  border: 1.5px dashed var(--brass);
+  border-radius: 6px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+}
+
+.paste-zone textarea:focus {
+  border-color: var(--brass-deep);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(184, 146, 90, 0.15);
+}
+
+.paste-zone textarea::placeholder {
+  color: var(--slate);
+  opacity: 0.7;
+  white-space: pre-wrap;
+}
+
+/* Tip line below textarea */
+.paste-hint {
+  margin: 0.45rem 0 0 0;
+  font-size: 0.78rem;
+  color: var(--slate);
+  line-height: 1.4;
+}
+
+.paste-hint strong {
+  color: var(--ink-navy);
+}
+
+/* Auto-filled bank select flash */
+select.auto-filled {
+  outline: 2px solid var(--ledger-teal);
+  transition: outline 0.3s;
+}
+
+/* Live paste row counter */
+.paste-counter {
+  margin: 0.3rem 0 0 0;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  color: var(--ledger-teal);
+  font-weight: 600;
+  min-height: 1.1em;
+}
+
+/* Keyboard shortcut hint badge */
+kbd {
+  display: inline-block;
+  padding: 0.1em 0.4em;
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  background: var(--parchment-deep);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  box-shadow: 0 1px 0 rgba(22,35,61,0.2);
+}
+
+/* ============================================================
+   All Transactions Detail Table
+   ============================================================ */
+
+.txn-detail-section {
+  border-top: 2px solid var(--rule);
+  padding-top: 1.5rem;
+}
+
+.txn-detail-count {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--slate);
+  background: var(--parchment-deep);
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+}
+
+/* Narration column — allow wrapping for long text */
+.txn-narr {
+  min-width: 180px;
+  max-width: 320px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+/* Date column */
+.txn-date {
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+/* Type badge */
+.txn-type {
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+}
+
+.type-credit {
+  color: var(--ledger-teal);
+  background: rgba(15,92,77,0.08);
+}
+
+.type-debit {
+  color: var(--stamp-red);
+  background: rgba(178,58,46,0.07);
+}
+
+/* Balance column */
+.amt-bal {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  text-align: right;
+  color: var(--ink-navy-soft);
+}
+
+/* tfoot total row */
+#txnTable tfoot .total-row td {
+  border-top: 2px solid var(--rule);
+  background: var(--parchment-deep);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}

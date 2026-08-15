@@ -58,9 +58,12 @@
 
       <div id="pasteInputContainer" hidden>
         <div class="paste-zone">
-          <textarea id="pasteInput" name="paste_text" placeholder="Paste your bank statement transaction rows here...&#10;e.g.&#10;12/08/2026 UPI/12345/Rent to Owner 15,000.00 50,000.00&#10;13-Aug-2026 Interest Received 500.00 50,500.00" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+          <textarea id="pasteInput" name="paste_text" placeholder="Paste bank statement rows here. Supported formats:&#10;&#10;Format 1 — Date  Narration  Debit  Credit  Balance (tab/space separated):&#10;12/08/2026  UPI/12345/Rent to Owner  15000.00    50000.00&#10;13-Aug-2026  Interest Received    500.00  50500.00&#10;&#10;Format 2 — Single amount per line (debit or credit):&#10;12/08/2026 UPI/12345/Rent to Owner Dr 15,000.00&#10;13-Aug-2026 Interest Credited Cr 500.00&#10;&#10;Format 3 — Tab-separated with header row:&#10;Date&#9;Narration&#9;Debit&#9;Credit&#9;Balance&#10;12/08/2026&#9;UPI Rent&#9;15000&#9;&#9;50000" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
         </div>
+        <p class="paste-counter" id="pasteCounter"></p>
+        <p class="paste-hint">💡 <strong>Tip:</strong> Copy rows from your bank's net banking table and press <kbd>Ctrl+V</kbd> here. Include <strong>Dr / Cr</strong> labels for best accuracy. &nbsp;|&nbsp; For large statements (500+ rows), use <strong>Upload File</strong> tab instead.</p>
       </div>
+
 
 
       <div class="form-row">
@@ -181,11 +184,38 @@
         <ul id="matchedPairsList" style="margin: 0; padding-left: 1.25rem; font-family: monospace; line-height: 1.4;"></ul>
       </div>
 
+    </div><!-- /#reportsSection -->
+
+    <!-- All Transactions Detail Table -->
+    <div class="txn-detail-section" id="txnDetailSection" style="margin-top:2rem;" hidden>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
+        <h3 style="font-family:Fraunces,serif; font-size:1.25rem; margin:0; color:#1e1e1e;">All Transactions</h3>
+        <span class="txn-detail-count" id="txnDetailCount"></span>
+      </div>
+      <div class="ledger-table-wrap" id="txnTableWrap">
+        <table class="ledger-table" id="txnTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Narration</th>
+              <th>Type</th>
+              <th>Debit</th>
+              <th>Credit</th>
+              <th>Balance</th>
+            </tr>
+          </thead>
+          <tbody id="txnBody"></tbody>
+          <tfoot id="txnFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
     <div class="results-actions">
-      <a id="downloadBtn" class="btn-primary" download>Download month-wise Excel</a>
+      <a id="downloadBtn" class="btn-primary" download>Download Excel</a>
       <button type="button" id="startOverBtn" class="btn-ghost">Analyze another statement</button>
     </div>
   </section>
+
 
 </main>
 

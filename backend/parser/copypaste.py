@@ -166,6 +166,7 @@ def try_parse_as_table(lines):
     return transactions
 
 def parse_line_heuristically(line):
+    original_line = line  # keep for Dr/Cr detection
     dt, cleaned = extract_date_and_clean_line(line)
     if not dt:
         return None
@@ -280,23 +281,31 @@ def parse_line_heuristically(line):
     
     # If the line represents a balance row, don't treat the balance as a transaction amount
     narr_lower = narration.lower()
+    orig_lower = original_line.lower()
     is_bal_row = any(k in narr_lower for k in ['closing balance', 'opening balance', 'brought forward', 'b/f', 'balance b/d', 'balance c/f', 'balance c/d', 'bal b/f'])
+    
+    # Check explicit Dr/Cr labels anywhere in the original line
+    has_explicit_cr = bool(re.search(r'\b(cr|credit|credited|deposit|received|int|interest|\+)\b', orig_lower))
+    has_explicit_dr = bool(re.search(r'\b(dr|debit|debited|withdrawal|wdl|paid|sent|transfer out|-)\b', orig_lower))
     
     if len(amount_vals) == 1:
         val = amount_vals[0]
         if is_bal_row:
             balance = val
+        elif has_explicit_cr and not has_explicit_dr:
+            credit = val
+        elif has_explicit_dr and not has_explicit_cr:
+            debit = val
+        elif any(w in narr_lower for w in ['credit', 'deposit', 'from', 'int', 'interest', 'received']):
+            credit = val
         else:
-            if any(w in narr_lower for w in ['credit', 'deposit', 'from', 'int', 'interest', 'received']):
-                credit = val
-            else:
-                debit = val
+            debit = val
     elif len(amount_vals) == 2:
         val1, val2 = amount_vals[0], amount_vals[1]
         if is_bal_row:
             balance = val2
         else:
-            if any(w in narr_lower for w in ['credit', 'deposit', 'from', 'int', 'interest', 'received']):
+            if (has_explicit_cr and not has_explicit_dr) or any(w in narr_lower for w in ['credit', 'deposit', 'from', 'int', 'interest', 'received']):
                 credit = val1
             else:
                 debit = val1

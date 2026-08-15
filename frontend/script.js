@@ -367,8 +367,95 @@ if (tabUploadFile && tabPasteText) {
 }
 
 if (pasteInput) {
-  pasteInput.addEventListener('input', updateAnalyzeButtonState);
+  pasteInput.addEventListener('input', function() {
+    updateAnalyzeButtonState();
+    updatePasteCounter();
+  });
+  pasteInput.addEventListener('keyup', function() {
+    updateAnalyzeButtonState();
+    updatePasteCounter();
+  });
+  pasteInput.addEventListener('change', function() {
+    updateAnalyzeButtonState();
+    updatePasteCounter();
+  });
+
+  // --- Native paste handler (NO preventDefault) ---
+  // Let the browser handle the actual text insertion (it handles large data
+  // much better than manual clipboard reading). We just update state after.
+  pasteInput.addEventListener('paste', function (e) {
+    // Schedule multiple checks to catch async clipboard writes
+    setTimeout(function() { updateAnalyzeButtonState(); updatePasteCounter(); }, 50);
+    setTimeout(function() { updateAnalyzeButtonState(); updatePasteCounter(); }, 300);
+    setTimeout(function() { updateAnalyzeButtonState(); updatePasteCounter(); }, 800);
+  });
+
+  // Drag & drop text
+  pasteInput.addEventListener('drop', function () {
+    setTimeout(function() { updateAnalyzeButtonState(); updatePasteCounter(); }, 150);
+    setTimeout(function() { updateAnalyzeButtonState(); updatePasteCounter(); }, 500);
+  });
+
+  // --- Polling fallback for Windows Clipboard History (Win+V) ---
+  var _pasteLastVal = '';
+  var _pastePoller = null;
+
+  pasteInput.addEventListener('focus', function () {
+    _pasteLastVal = pasteInput.value;
+    _pastePoller = setInterval(function () {
+      if (pasteInput.value !== _pasteLastVal) {
+        _pasteLastVal = pasteInput.value;
+        updateAnalyzeButtonState();
+        updatePasteCounter();
+      }
+    }, 250);
+  });
+
+  pasteInput.addEventListener('blur', function () {
+    if (_pastePoller) { clearInterval(_pastePoller); _pastePoller = null; }
+    updateAnalyzeButtonState();
+    updatePasteCounter();
+  });
 }
+
+/** Convert an HTML table string (from Excel clipboard) to tab-separated text */
+function htmlTableToTSV(html) {
+  try {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(html, 'text/html');
+    var rows = doc.querySelectorAll('tr');
+    var lines = [];
+    rows.forEach(function(row) {
+      var cells = row.querySelectorAll('td, th');
+      var parts = [];
+      cells.forEach(function(cell) {
+        parts.push((cell.textContent || '').trim());
+      });
+      if (parts.some(function(p) { return p.length > 0; })) {
+        lines.push(parts.join('\t'));
+      }
+    });
+    return lines.join('\n');
+  } catch (err) {
+    return '';
+  }
+}
+
+/** Show a live row/char counter below the paste textarea */
+function updatePasteCounter() {
+  if (!pasteInput) return;
+  var counterEl = document.getElementById('pasteCounter');
+  if (!counterEl) return;
+  var val = pasteInput.value;
+  if (!val || !val.trim()) {
+    counterEl.textContent = '';
+    return;
+  }
+  var lines = val.split('\n').filter(function(l) { return l.trim().length > 0; });
+  var chars = val.length;
+  counterEl.textContent = '✓ ' + lines.length.toLocaleString('en-IN') + ' lines captured (' + chars.toLocaleString('en-IN') + ' chars)';
+}
+
 
 /* ---------- Submit / analyze ---------- */
 
@@ -624,6 +711,9 @@ function renderResults(data) {
     reportsSection.hidden = false;
   }
 
+  // Render full transactions table
+  renderTransactionsTable(data);
+
   // Show results
   results.hidden = false;
   
@@ -646,6 +736,71 @@ function renderResults(data) {
 
   // Check table scroll and update fade indicator
   updateScrollIndicator();
+}
+
+/* ---------- All Transactions Table ---------- */
+
+function classifyTxn(t) {
+  var narr = (t.narration || '').toUpperCase();
+  var isCredit = (t.credit || 0) > 0;
+  var isDebit  = (t.debit  || 0) > 0;
+  if (!isCredit && !isDebit) return 'Other';
+  var side = isCredit ? 'Credit' : 'Debit';
+  if (/\bINT\b|INTEREST/.test(narr)) return side + ' Interest';
+  if (/\bCHG\b|CHARGE/.test(narr))   return side + ' Charge';
+  return side;
+}
+
+function renderTransactionsTable(data) {
+  var section = document.getElementById('txnDetailSection');
+  var tbody   = document.getElementById('txnBody');
+  var tfoot   = document.getElementById('txnFoot');
+  var countEl = document.getElementById('txnDetailCount');
+  if (!section || !tbody || !tfoot) return;
+
+  tbody.innerHTML = '';
+  tfoot.innerHTML = '';
+
+  var txns = data.transactions;
+  if (!txns || txns.length === 0) {
+    section.hidden = true;
+    return;
+  }
+
+  var totalDebit  = 0;
+  var totalCredit = 0;
+
+  txns.forEach(function (t) {
+    var type = classifyTxn(t);
+    var isCredit = type.startsWith('Credit');
+    var isDebit  = type.startsWith('Debit');
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="txn-date">'    + (t.date || '') + '</td>' +
+      '<td class="txn-narr">'    + (t.narration || '').replace(/</g,'&lt;') + '</td>' +
+      '<td class="txn-type ' + (isCredit ? 'type-credit' : isDebit ? 'type-debit' : '') + '">' + type + '</td>' +
+      '<td class="amt-debit">'   + ((t.debit  || 0) > 0 ? money(t.debit)  : '<span class="amt-zero">—</span>') + '</td>' +
+      '<td class="amt-credit">'  + ((t.credit || 0) > 0 ? money(t.credit) : '<span class="amt-zero">—</span>') + '</td>' +
+      '<td class="amt-bal">'     + (t.balance != null ? money(t.balance) : '<span class="amt-zero">—</span>') + '</td>';
+    tbody.appendChild(tr);
+    totalDebit  += (t.debit  || 0);
+    totalCredit += (t.credit || 0);
+  });
+
+  // TOTAL row in tfoot
+  var tftr = document.createElement('tr');
+  tftr.className = 'total-row';
+  tftr.innerHTML =
+    '<td colspan="3"><strong>TOTAL</strong></td>' +
+    '<td class="amt-debit"><strong>'  + money(totalDebit)  + '</strong></td>' +
+    '<td class="amt-credit"><strong>' + money(totalCredit) + '</strong></td>' +
+    '<td></td>';
+  tfoot.appendChild(tftr);
+
+  if (countEl) {
+    countEl.textContent = txns.length.toLocaleString('en-IN') + ' transactions';
+  }
+  section.hidden = false;
 }
 
 function scrollRowIntoView(idx) {
@@ -687,18 +842,22 @@ startOverBtn.addEventListener('click', function () {
   uploadCard.hidden = false;
   selectedFiles = [];
   fileInput.value = '';
-  if (pasteInput) {
-    pasteInput.value = '';
-  }
+  if (pasteInput) pasteInput.value = '';
   fileChip.hidden = true;
   updateAnalyzeButtonState();
   hideError();
   hideWarning();
   
   var reportsSection = document.getElementById('reportsSection');
-  if (reportsSection) {
-    reportsSection.hidden = true;
-  }
+  if (reportsSection) reportsSection.hidden = true;
+
+  // Clear transactions table
+  var txnSection = document.getElementById('txnDetailSection');
+  if (txnSection) txnSection.hidden = true;
+  var txnBody = document.getElementById('txnBody');
+  if (txnBody) txnBody.innerHTML = '';
+  var txnFoot = document.getElementById('txnFoot');
+  if (txnFoot) txnFoot.innerHTML = '';
   
   // Scroll back to top
   window.scrollTo({ top: 0, behavior: 'smooth' });
