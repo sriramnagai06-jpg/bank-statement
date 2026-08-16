@@ -1,5 +1,7 @@
 # Bank Statement Analyzer & Reconciliation Engine
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https%3A%2F%2Fgithub.com%2Fsriramnagai06-jpg%2Fbank-statement)
+
 A complete, production-grade Bank Statement Analyzer that converts bank statement PDFs, Excel files, and copy-pasted statement rows into clean, verified, and audited financial ledgers.
 
 ---
